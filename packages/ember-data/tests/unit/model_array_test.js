@@ -25,7 +25,7 @@ test("a model array is backed by models", function() {
   var modelArray = store.find(Person, [1,2,3]);
 
   for (var i=0, l=get(array, 'length'); i<l; i++) {
-    equal(get(modelArray.objectAt(i), 'data'), array[i], "a model array materializes objects on demand");
+    deepEqual(modelArray.objectAt(i).toJSON(), array[i], "a model array materializes objects on demand");
   }
 });
 
@@ -51,7 +51,7 @@ test("a model array can have a filter on it", function() {
   store.loadMany(Person, array);
 
   var modelArray = store.filter(Person, function(hash) {
-    if (hash.name.match(/Scumbag [KD]/)) { return true; }
+    if (hash.get('name').match(/Scumbag [KD]/)) { return true; }
   });
 
   equal(get(modelArray, 'length'), 2, "The model Array should have the filtered objects on it");
@@ -71,7 +71,7 @@ test("a filtered model array includes created elements", function() {
   store.loadMany(Person, array);
 
   var modelArray = store.filter(Person, function(hash) {
-    if (hash.name.match(/Scumbag [KD]/)) { return true; }
+    if (hash.get('name').match(/Scumbag [KD]/)) { return true; }
   });
 
   equal(get(modelArray, 'length'), 2, "precond - The model Array should have the filtered objects on it");
@@ -97,13 +97,13 @@ test("a model Array can update its filter", function() {
   store.loadMany(Person, array);
 
   var modelArray = store.filter(Person, function(hash) {
-    if (hash.name.match(/Scumbag [KD]/)) { return true; }
+    if (hash.get('name').match(/Scumbag [KD]/)) { return true; }
   });
 
   equal(get(modelArray, 'length'), 2, "The model Array should have the filtered objects on it");
 
   modelArray.set('filterFunction', function(hash) {
-    if (hash.name.match(/Katz/)) { return true; }
+    if (hash.get('name').match(/Katz/)) { return true; }
   });
 
   equal(get(modelArray, 'length'), 1, "The model Array should have one object on it");
@@ -116,6 +116,107 @@ test("a model Array can update its filter", function() {
 
   equal(get(modelArray, 'length'), 2, "The model Array doesn't have objects matching the old filter");
 });
+
+(function(){
+  var store, modelArray;
+
+  var clientEdits = function(ids) {
+    Ember.run( function() {
+      ids.forEach( function(id) {
+        var person = store.find(Person, id);
+        person.set('name', 'Client-side ' + id );
+      });
+    });
+  };
+
+  var clientCreates = function(names) {
+    Ember.run( function() {
+      names.forEach( function( name ) {
+        Person.createRecord({ name: 'Client-side ' + name });
+      });
+    });
+  };
+
+  var serverResponds = function(){
+    Ember.run(function() { store.commit(); });
+  };
+
+  var setup = function(serverCallbacks) {
+    store = DS.Store.create({
+      adapter: DS.Adapter.create(serverCallbacks)
+    });
+
+    store.loadMany(Person, array);
+
+    modelArray = store.filter(Person, function(hash) {
+      if (hash.get('name').match(/Scumbag/)) { return true; }
+    });
+
+    equal(get(modelArray, 'length'), 3, "The filter function should work");
+  };
+
+  test("a model Array can update its filter after server-side updates one record", function() {
+    setup({
+      updateRecord: function(store, type, model) {
+        store.didUpdateRecord(model, {id: 1, name: "Scumbag Server-side Dale"});
+      }
+    });
+
+    clientEdits([1]);
+    equal(get(modelArray, 'length'), 2, "The model array updates when the client changes records");
+
+    serverResponds();
+    equal(get(modelArray, 'length'), 3, "The model array updates when the server changes one record");
+  });
+
+  test("a model Array can update its filter after server-side updates multiple records", function() {
+    setup({
+      updateRecords: function(store, type, models) {
+        store.didUpdateRecords(models, [
+          {id: 1, name: "Scumbag Server-side Dale"},
+          {id: 2, name: "Scumbag Server-side Katz"}
+        ]);
+      }
+    });
+
+    clientEdits([1,2]);
+    equal(get(modelArray, 'length'), 1, "The model array updates when the client changes records");
+
+    serverResponds();
+    equal(get(modelArray, 'length'), 3, "The model array updates when the server changes multiple records");
+  });
+
+  test("a model Array can update its filter after server-side creates one record", function() {
+    setup({
+      createRecord: function(store, type, model) {
+        store.didCreateRecord(model, {id: 4, name: "Scumbag Server-side Tim"});
+      }
+    });
+
+    clientCreates(["Tim"]);
+    equal(get(modelArray, 'length'), 3, "The model array does not include non-matching records");
+
+    serverResponds();
+    equal(get(modelArray, 'length'), 4, "The model array updates when the server creates a record");
+  });
+
+  test("a model Array can update its filter after server-side creates multiple records", function() {
+    setup({
+      createRecords: function(store, type, models) {
+        store.didCreateRecords(Person, models, [
+          {id: 4, name: "Scumbag Server-side Mike"},
+          {id: 5, name: "Scumbag Server-side David"}
+        ]);
+      }
+    });
+
+    clientCreates(["Mike", "David"]);
+    equal(get(modelArray, 'length'), 3, "The model array does not include non-matching records");
+
+    serverResponds();
+    equal(get(modelArray, 'length'), 5, "The model array updates when the server creates multiple records");
+  });
+}());
 
 test("an AdapterPopulatedModelArray knows if it's loaded or not", function() {
   expect(2);

@@ -2,6 +2,30 @@ var get = Ember.get, getPath = Ember.getPath;
 
 require("ember-data/system/model/model");
 
+DS.Model.reopenClass({
+  attributes: Ember.computed(function() {
+    var map = Ember.Map.create();
+
+    this.eachComputedProperty(function(name, meta) {
+      if (meta.isAttribute) { map.set(name, meta); }
+    });
+
+    return map;
+  }).cacheable(),
+
+  processAttributeKeys: function() {
+    if (this.processedAttributeKeys) { return; }
+
+    var namingConvention = this.proto().namingConvention;
+
+    this.eachComputedProperty(function(name, meta) {
+      if (meta.isAttribute && !meta.options.key) {
+        meta.options.key = namingConvention.keyToJSONKey(name, this);
+      }
+    }, this);
+  }
+});
+
 DS.attr = function(type, options) {
   var transform = DS.attr.transforms[type];
   ember_assert("Could not find model attribute of type " + type, !!transform);
@@ -9,24 +33,45 @@ DS.attr = function(type, options) {
   var transformFrom = transform.from;
   var transformTo = transform.to;
 
+  options = options || {};
+
+  var meta = {
+    type: type,
+    isAttribute: true,
+    options: options,
+
+    // this will ensure that the key always takes naming
+    // conventions into consideration.
+    key: function(recordType) {
+      recordType.processAttributeKeys();
+      return options.key;
+    }
+  };
+
   return Ember.computed(function(key, value) {
-    var data = get(this, 'data');
+    var data;
 
-    key = (options && options.key) ? options.key : key;
+    key = meta.key(this.constructor);
 
-    if (value === undefined) {
-      if (!data) { return; }
-
-      return transformFrom(data[key]);
-    } else {
-      ember_assert("You cannot set a model attribute before its data is loaded.", !!data);
-
+    if (arguments.length === 2) {
       value = transformTo(value);
       this.setProperty(key, value);
-      return value;
+    } else {
+      data = get(this, 'data');
+      value = get(data, key);
+
+      if (value === undefined) {
+        value = options.defaultValue;
+      }
     }
-  }).property('data');
+
+    return transformFrom(value);
+  // `data` is never set directly. However, it may be
+  // invalidated from the state manager's setData
+  // event.
+  }).property('data').cacheable().meta(meta);
 };
+
 DS.attr.transforms = {
   string: {
     from: function(serialized) {
@@ -38,7 +83,7 @@ DS.attr.transforms = {
     }
   },
 
-  integer: {
+  number: {
     from: function(serialized) {
       return Ember.none(serialized) ? null : Number(serialized);
     },
@@ -48,7 +93,7 @@ DS.attr.transforms = {
     }
   },
 
-  boolean: {
+  'boolean': {
     from: function(serialized) {
       return Boolean(serialized);
     },
