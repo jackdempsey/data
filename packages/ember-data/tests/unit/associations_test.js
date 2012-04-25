@@ -312,9 +312,9 @@ test("it is possible to remove an item from an association", function() {
   equal(getPath(person, 'tags.length'), 0, "object is removed from the association");
 });
 
-module("ModelArray");
+module("RecordArray");
 
-test("updating the content of a ModelArray updates its content", function() {
+test("updating the content of a RecordArray updates its content", function() {
   var Tag = DS.Model.extend({
     name: DS.attr('string')
   });
@@ -324,7 +324,7 @@ test("updating the content of a ModelArray updates its content", function() {
 
   var clientIds = loaded.clientIds;
 
-  var tags = DS.ModelArray.create({ content: Ember.A([clientIds[0], clientIds[1]]), store: store, type: Tag });
+  var tags = DS.RecordArray.create({ content: Ember.A([clientIds[0], clientIds[1]]), store: store, type: Tag });
 
   var tag = tags.objectAt(0);
   equal(get(tag, 'name'), "friendly", "precond - we're working with the right tags");
@@ -460,4 +460,21 @@ test("belongsTo embedded associations work the same as referenced ones, and have
 
   strictEqual(get(person, 'tag'), get(person, 'tag'), "the returned object is always the same");
   strictEqual(get(person, 'tag'), store.find(Tag, 5), "association object are the same as object retrieved directly");
+});
+
+test("embedded associations should respect namingConvention", function() {
+  var MyCustomTag = DS.Model.extend({
+    name: DS.attr('string')
+  });
+
+  var Person = DS.Model.extend({
+    name: DS.attr('string'),
+    myCustomTags: DS.hasMany(MyCustomTag, { embedded: true })
+  });
+
+  var store = DS.Store.create();
+  store.load(Person, 1, { id: 1, name: "Tom Dale", my_custom_tag: { id: 5, name: "UN-friendly" }, my_custom_tags: [ { id: 5, name: "UN-friendly" } ] });
+
+  var person = store.find(Person, 1);
+  equal(getPath(person, 'myCustomTags.firstObject.name'), "UN-friendly", "hasMany tag should be set properly");
 });

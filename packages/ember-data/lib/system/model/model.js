@@ -7,7 +7,7 @@ var retrieveFromCurrentState = Ember.computed(function(key) {
   return get(getPath(this, 'stateManager.currentState'), key);
 }).property('stateManager.currentState').cacheable();
 
-DS.Model = Ember.Object.extend({
+DS.Model = Ember.Object.extend(Ember.Evented, {
   isLoaded: retrieveFromCurrentState,
   isDirty: retrieveFromCurrentState,
   isSaving: retrieveFromCurrentState,
@@ -38,11 +38,11 @@ DS.Model = Ember.Object.extend({
     return data && get(data, primaryKey);
   }).property('primaryKey', 'data'),
 
-  // The following methods are callbacks invoked by `getJSON`. You
+  // The following methods are callbacks invoked by `toJSON`. You
   // can override one of the callbacks to override specific behavior,
-  // or getJSON itself.
+  // or toJSON itself.
   //
-  // If you override getJSON, you can invoke these callbacks manually
+  // If you override toJSON, you can invoke these callbacks manually
   // to get the default behavior.
 
   /**
@@ -124,6 +124,7 @@ DS.Model = Ember.Object.extend({
       }
     }
 
+    key = options.key || get(this, 'namingConvention').keyToJSONKey(key);
     json[key] = records;
   },
 
@@ -198,7 +199,7 @@ DS.Model = Ember.Object.extend({
 
   init: function() {
     var stateManager = DS.StateManager.create({
-      model: this
+      record: this
     });
 
     set(this, 'pendingQueue', {});
@@ -246,7 +247,7 @@ DS.Model = Ember.Object.extend({
     var data = get(this, 'data');
 
     if (data && key in data) {
-      ember_assert("You attempted to access the " + key + " property on a model without defining an attribute.", false);
+      ember_assert("You attempted to access the " + key + " property on a record without defining an attribute.", false);
     }
   },
 
@@ -254,7 +255,7 @@ DS.Model = Ember.Object.extend({
     var data = get(this, 'data');
 
     if (data && key in data) {
-      ember_assert("You attempted to set the " + key + " property on a model without defining an attribute.", false);
+      ember_assert("You attempted to set the " + key + " property on a record without defining an attribute.", false);
     } else {
       return this._super(key, value);
     }
@@ -273,7 +274,7 @@ DS.Model = Ember.Object.extend({
 
   /** @private */
   hashWasUpdated: function() {
-    // At the end of the run loop, notify model arrays that
+    // At the end of the run loop, notify record arrays that
     // this record has changed so they can re-evaluate its contents
     // to determine membership.
     Ember.run.once(this, this.notifyHashWasUpdated);
@@ -300,7 +301,18 @@ DS.Model = Ember.Object.extend({
         }
       }
     }, this);
-  }, 'data')
+  }, 'data'),
+
+  /**
+    @private
+
+    Override the default event firing from Ember.Evented to
+    also call methods with the given name.
+  */
+  fire: function(name) {
+    this[name].apply(this, [].slice.call(arguments, 1));
+    this._super.apply(this, arguments);
+  }
 });
 
 // Helper function to generate store aliases.

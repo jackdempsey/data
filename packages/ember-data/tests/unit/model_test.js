@@ -1,6 +1,6 @@
 var get = Ember.get, set = Ember.set, getPath = Ember.getPath;
 
-var store, Person;
+var Person, store, array;
 
 module("DS.Model", {
   setup: function() {
@@ -12,8 +12,8 @@ module("DS.Model", {
   },
 
   teardown: function() {
-    store = null;
     Person = null;
+    store = null;
   }
 });
 
@@ -21,7 +21,7 @@ test("can have a property set on it", function() {
   var record = store.createRecord(Person);
   set(record, 'name', 'bar');
 
-  equal(get(record, 'name'), 'bar', "property was set on the model");
+  equal(get(record, 'name'), 'bar', "property was set on the record");
 });
 
 test("a record reports its unique id via the `id` property", function() {
@@ -128,10 +128,10 @@ test("a DS.Model can describe Date attributes", function() {
   });
 
   store.load(Person, { id: 1 });
-  var model = store.find(Person, 1);
+  var record = store.find(Person, 1);
 
-  model.set('updatedAt', date);
-  deepEqual(date, get(model, 'updatedAt'), "setting a date returns the same date");
+  record.set('updatedAt', date);
+  deepEqual(date, get(record, 'updatedAt'), "setting a date returns the same date");
   convertsFromServer('date', dateString, date);
   convertsWhenSet('date', date, dateString);
 });
@@ -144,13 +144,33 @@ test("retrieving properties should return the same value as they would if they w
     })
   });
 
+  // TODO :
+  // Investigate why this test fail with DS.attr `name` and jshint because of this :
+  // if (typeof String.prototype.name !== 'function') {
+  //   String.prototype.name = function () {
+  //     if (ix.test(this)) {
+  //         return this;
+  //     }
+  //     if (nx.test(this)) {
+  //         return '"' + this.replace(nxg, function (a) {
+  //             var c = escapes[a];
+  //             if (c) {
+  //                 return c;
+  //             }
+  //             return '\\u' + ('0000' + a.charCodeAt().toString(16)).slice(-4);
+  //         }) + '"';
+  //     }
+  //     return '"' + this + '"';
+  //   };
+  // }
+
   var Person = DS.Model.extend({
-    name: DS.attr('string')
+    firstName: DS.attr('string')
   });
 
   var record = store.find(Person, 1);
 
-  strictEqual(get(record, 'name'), null, "returns null value");
+  strictEqual(get(record, 'firstName'), null, "returns null value");
 });
 
 test("it should cache attributes", function() {
@@ -165,11 +185,11 @@ test("it should cache attributes", function() {
 
   store.load(Post, { id: 1 });
 
-  var model = store.find(Post, 1);
+  var record = store.find(Post, 1);
 
-  model.set('updatedAt', date);
-  deepEqual(date, get(model, 'updatedAt'), "setting a date returns the same date");
-  strictEqual(get(model, 'updatedAt'), get(model, 'updatedAt'), "second get still returns the same object");
+  record.set('updatedAt', date);
+  deepEqual(date, get(record, 'updatedAt'), "setting a date returns the same date");
+  strictEqual(get(record, 'updatedAt'), get(record, 'updatedAt'), "second get still returns the same object");
 });
 
 test("it can specify which key to use when looking up properties on the hash", function() {
@@ -183,16 +203,17 @@ test("it can specify which key to use when looking up properties on the hash", f
   equal(get(record, 'name'), "Pete", "retrieves correct value");
 });
 
-
-
-var Person, store, array;
-
 module("DS.Model updating", {
   setup: function() {
     array = [{ id: 1, name: "Scumbag Dale" }, { id: 2, name: "Scumbag Katz" }, { id: 3, name: "Scumbag Bryn" }];
     Person = DS.Model.extend({ name: DS.attr('string') });
     store = DS.Store.create();
     store.loadMany(Person, array);
+  },
+  teardown: function() {
+    Person = null;
+    store = null;
+    array = null;
   }
 });
 
@@ -238,7 +259,7 @@ test("when a DS.Model updates its attributes, its changes affect its filtered Ar
     if (hash.get('name').match(/Katz$/)) { return true; }
   });
 
-  equal(get(people, 'length'), 1, "precond - one item is in the ModelArray");
+  equal(get(people, 'length'), 1, "precond - one item is in the RecordArray");
 
   var person = people.objectAt(0);
 
@@ -258,6 +279,7 @@ test("when a DS.Model updates its attributes, its changes affect its filtered Ar
   equal(get(people, 'length'), 0, "there are now no items");
 });
 
+
 module("with a simple Person model", {
   setup: function() {
     array = [{ id: 1, name: "Scumbag Dale" }, { id: 2, name: "Scumbag Katz" }, { id: 3, name: "Scumbag Bryn" }];
@@ -266,6 +288,11 @@ module("with a simple Person model", {
     });
     store = DS.Store.create();
     store.loadMany(Person, array);
+  },
+  teardown: function() {
+    Person = null;
+    store = null;
+    array = null;
   }
 });
 
@@ -274,7 +301,7 @@ test("when a DS.Model updates its attributes, its changes affect its filtered Ar
     if (hash.get('name').match(/Katz$/)) { return true; }
   });
 
-  equal(get(people, 'length'), 1, "precond - one item is in the ModelArray");
+  equal(get(people, 'length'), 1, "precond - one item is in the RecordArray");
 
   var person = people.objectAt(0);
 
